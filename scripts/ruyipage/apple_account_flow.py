@@ -4394,14 +4394,26 @@ def wait_for_signed_in(
             not last_state.get("twofa")
             and not last_state.get("trustPrompt")
             and submitted
-            and is_developer_account_url(str(last_state.get("href") or ""))
         ):
-            # After OTP submission and trust handling, the page has reached
-            # the Developer account URL. Any lingering error flag is a false
-            # positive from a retiring idmsa iframe. Accept the transition
-            # so the flow can continue to membership detection.
-            last_state["trusted"] = True
-            return last_state
+            # The OTP was submitted, the 2FA form is gone, and the trust
+            # prompt was handled.  Accept the transition unless the page is
+            # demonstrably still on an Apple sign-in or account-manage URL
+            # with an active root error (which would mean a real failure,
+            # not a retiring-child false positive).
+            current_href = str(last_state.get("href") or "")
+            on_apple_surface = (
+                is_account_sign_in_url(current_href)
+                or is_account_manage_url(current_href)
+            )
+            if is_developer_account_url(current_href):
+                # Developer account page reached — login definitely succeeded.
+                last_state["trusted"] = True
+                return last_state
+            if not on_apple_surface:
+                # Empty or unrecognised URL with 2FA+trust gone — the page
+                # has transitioned away from the authentication flow.
+                last_state["trusted"] = True
+                return last_state
         if last_state.get("error"):
             if (
                 allow_retiring_child_errors
