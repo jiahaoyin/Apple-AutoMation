@@ -591,22 +591,26 @@ func focusAndSetLoginValue(
             identifier: identifier
         ), isEnabledAndFocused(keyboardHit.element) {
             // Clear existing content so typing replaces it cleanly.
+            // Uses the official AX API: setting kAXValueAttribute to ""
+            // on a focused NSAccessibilityTextField is the standard way to
+            // clear it before keyboard input.
             let beforeClear = axString(keyboardHit.element, kAXValueAttribute as String)
             if let beforeClear, !beforeClear.isEmpty {
-                guard AXUIElementSetAttributeValue(
+                let cleared = AXUIElementSetAttributeValue(
                     keyboardHit.element,
                     kAXValueAttribute as CFString,
                     "" as CFString
-                ) == .success,
-                      waitForExactLoginValue(
-                          appElement: appElement,
-                          state: state,
-                          identifier: identifier,
-                          expectedValue: ""
-                      ) else {
-                    // AX clear failed – continue with typing; partial overlap
-                    // is better than failing the entire email phase.
+                ) == .success
+                if cleared {
+                    _ = waitForExactLoginValue(
+                        appElement: appElement,
+                        state: state,
+                        identifier: identifier,
+                        expectedValue: ""
+                    )
                 }
+                // If clear fails, continue with typing anyway — partial
+                // overlap is better than failing the entire email phase.
                 usleep(60_000)
             }
 
