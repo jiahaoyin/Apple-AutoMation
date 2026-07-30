@@ -10,7 +10,8 @@ const TWO_DIGIT_SUFFIX_RE = /^[0-9]{2}$/;
 // won't block the poll loop for minutes, long enough for real AX work.
 const NATIVE_CALL_TIMEOUT_MS = 15_000;
 const PHONE_SELECTION_TOTAL_MS = 60_000;
-const PROVIDER_POLL_MS = 250;
+const MAX_WAIT_WITHOUT_PROGRESS_MS = 90_000;
+const WAIT_PROGRESS_INTERVAL_MS = 15_000;
 
 function failure(code) { const error = new Error(code); error.code = code; return error; }
 function readRemainingMs(deadline, now) { return Math.max(0, deadline - now()); }
@@ -85,6 +86,8 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
   let selectionSubmitted = false;
   let lastStage = "initial";
   let pollCount = 0;
+  let waitingStartedAt = 0;
+  let lastWaitProgressAt = 0;
 
   // ── helpers ──────────────────────────────────────────────────────────
 
@@ -135,6 +138,12 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
       console.warn("[SMS] Unable to read the SMS verification screen. Is System Settings visible?");
       await pause(Math.min(pollIntervalMs, readRemainingMs(deadline, now)));
       continue;
+    }
+
+    // Reset the "stuck in waiting" tracker whenever we see a concrete stage.
+    if (state.stage !== "waiting") {
+      waitingStartedAt = 0;
+      reportStage(state.stage);
     }
 
     // ── phone selection ────────────────────────────────────────────────
@@ -245,13 +254,64 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
 
     // ── waiting ─────────────────────────────────────────────────────────
     if (state.stage === "waiting") {
-      if (pollCount === 0) reportStage("waiting");
+      if (waitingStartedAt === 0) {
+        waitingStartedAt = now();
+        lastWaitProgressAt = now();
+        console.log("[SMS] Waiting for the SMS verification screen to appear …");
+      }
+
+      const waitedMs = now() - waitingStartedAt;
+      // Periodic progress so the user knows the script is still alive.
+      if (now() - lastWaitProgressAt >= WAIT_PROGRESS_INTERVAL_MS) {
+        const elapsedSec = Math.round(waitedMs / 1000);
+        console.log(`[SMS] Still waiting … (${elapsedSec}s elapsed, checking every ${pollIntervalMs}ms)`);
+        lastWaitProgressAt = now();
+      }
+
+      // If we have been stuck in "waiting" for too long without ever seeing
+      // phone_selection or code_entry, offer the user a manual path.
+      if (waitedMs >= MAX_WAIT_WITHOUT_PROGRESS_MS) {
+        console.warn(`\n[SMS] ⚠  SMS verification screen not detected after ${Math.round(waitedMs / 1000)}s.`);
+        console.warn("[SMS]    If the verification code screen IS visible, you can enter the code now.");
+        console.warn("[SMS]    If the phone selection screen IS visible, please select your number");
+        console.warn("[SMS]    and click Continue, then enter the code below.\n");
+
+        if (isTTY) {
+          try {
+            const manualCode = await acquireCode(manualCodeProvider, manualTimeoutMs);
+            if (manualCode) {
+              console.log("[SMS] ✓ Manual code accepted. Attempting to submit …");
+              const filled = await invokeNative("sms-code", { code: manualCode, suffix });
+              if (filled?.ok === true) {
+                console.log("[SMS] ✓ Verification code submitted.");
+              } else {
+                console.warn("[SMS] Could not auto-fill. Please enter the code directly in System Settings.");
+                console.warn("[SMS] Press Enter when done …");
+                await promptForHiddenVerificationCode({
+                  prompt: "[SMS] Press Enter after submitting the code",
+                  timeoutMs: readRemainingMs(deadline, now),
+                  allowEmpty: true,
+                }).catch(() => {});
+              }
+              return { status: "submitted" };
+            }
+          } catch {
+            // Manual input cancelled or timed out.
+          }
+        }
+
+        // Reset wait tracking so we don't immediately re-prompt.
+        waitingStartedAt = now();
+        lastWaitProgressAt = now();
+        console.warn("[SMS] Resuming automatic detection …");
+      }
+
       await pause(Math.min(pollIntervalMs, readRemainingMs(deadline, now)));
       continue;
     }
-  }
 
   throw failure("MAC_SETTINGS_SMS_TIMEOUT");
+  }
 }
 
 export const MAC_SETTINGS_SMS_SUFFIX_RE = TWO_DIGIT_SUFFIX_RE;
