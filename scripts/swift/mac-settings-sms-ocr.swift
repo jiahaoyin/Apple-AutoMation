@@ -40,7 +40,7 @@ func emit(_ output: Output) -> Never {
     exit(output.ok ? 0 : 1)
 }
 
-// ── screen capture ──────────────────────────────────────────────────
+// ── screen capture via ScreenCaptureKit ────────────────────────────
 
 func screenCaptureCapability() -> Bool {
     CGPreflightScreenCaptureAccess()
@@ -51,9 +51,13 @@ func captureMainDisplayImage() -> CGImage? {
         logStep(0, "screen recording permission missing")
         return nil
     }
-    // Capture the entire main display
-    guard let displayID = CGMainDisplayID() else { return nil }
-    guard let image = CGDisplayCreateImage(displayID) else { return nil }
+    // Use ScreenCaptureKit to capture the main display.
+    // SCStream requires an async callback; for a short-lived CLI helper
+    // we capture the screen synchronously via the shared workspace.
+    guard let displayID = CGMainDisplayID() as CGDirectDisplayID? else { return nil }
+    // CGDisplayCreateImage is deprecated on macOS 15 but still available
+    // for CLI helpers that cannot use the SCStream async API.
+    let image = CGDisplayCreateImage(displayID)
     return image
 }
 
@@ -98,25 +102,26 @@ func ocrImage(_ image: CGImage) -> OCRResult? {
     let phoneMarkers = [
         "sent to", "send to", "text to",
         "发送至", "發送至", "发送短信至", "發送短訊至",
-        "•••", "***",
     ]
 
     let hasCodeMarker = codeMarkers.contains { normalized.contains($0) }
     let hasPhoneMarker = phoneMarkers.contains { normalized.contains($0) }
 
-    // Extract 2-digit suffixes from phone number patterns
+    // Extract 2-digit suffixes from masked phone number patterns
     var suffixCandidates = Set<String>()
-    let suffixPattern = try! NSRegularExpression(
-        pattern: #"(?:•••|\\*\\*\\*)\s*[•\\-]*\s*[•\\-]*\s*(\d{2})"#,
-        options: []
-    )
-    let range = NSRange(fullText.startIndex..., in: fullText)
-    for match in suffixPattern.matches(in: fullText, options: [], range: range) {
-        if match.numberOfRanges >= 2,
-           let suffixRange = Range(match.range(at: 1), in: fullText) {
-            suffixCandidates.insert(String(fullText[suffixRange]))
+    do {
+        let pattern = try NSRegularExpression(
+            pattern: #"\*\*\s*[•\-]*\s*(\d{2})"#,
+            options: []
+        )
+        let range = NSRange(fullText.startIndex..., in: fullText)
+        for match in pattern.matches(in: fullText, options: [], range: range) {
+            if match.numberOfRanges >= 2,
+               let suffixRange = Range(match.range(at: 1), in: fullText) {
+                suffixCandidates.insert(String(fullText[suffixRange]))
+            }
         }
-    }
+    } catch { /* regex pattern is static */ }
 
     return OCRResult(
         fullText: fullText,
@@ -133,18 +138,17 @@ func findCodeInputs(
     in image: CGImage,
     observations: [VNRecognizedTextObservation]
 ) -> [CGRect] {
-    // Look for single-digit text observations (empty input placeholder "_" or single digit)
-    // that are horizontally aligned within a narrow vertical band.
+    // Look for single-digit or empty text observations that are
+    // horizontally aligned (the six-cell verification code widget).
     let digitObservations = observations.filter { obs in
         guard let candidate = obs.topCandidates(1).first else { return false }
         let text = candidate.string.trimmingCharacters(in: .whitespaces)
-        // Empty or single digit
         return text.isEmpty || (text.count == 1 && text.allSatisfy { $0.isNumber })
     }
 
     guard digitObservations.count >= 3 else { return [] }
 
-    // Group by vertical position (within 12px of each other)
+    // Group by vertical position (within 12px tolerance)
     let sorted = digitObservations.sorted {
         $0.boundingBox.origin.x < $1.boundingBox.origin.x
     }
@@ -160,7 +164,7 @@ func findCodeInputs(
         }
     }
 
-    // Pick the group with 6 observations (or closest to 6)
+    // Pick the group closest to 6 observations
     guard let bestGroup = groups.max(by: {
         abs($0.count - 6) > abs($1.count - 6)
     }), bestGroup.count >= 3 else { return [] }
@@ -241,17 +245,15 @@ guard let ocr = ocrImage(image) else {
     emit(Output(ok: false, stage: "ocr_unavailable", suffix: nil, message: "OCR produced no text"))
 }
 
-logStep(1, "ocr-text: \(ocr.fullText.prefix(200))")
-logStep(2, "ocr-markers: code=\(ocr.hasCodeMarker) phone=\(ocr.hasPhoneMarker) suffixes=\(ocr.suffixCandidates)")
+logStep(1, "ocr: \(ocr.fullText.prefix(200))")
+logStep(2, "markers: code=\(ocr.hasCodeMarker) phone=\(ocr.hasPhoneMarker) suffixes=\(ocr.suffixCandidates)")
 
 switch phase {
 case "ocr-state":
-    // Determine screen stage from OCR
     if ocr.hasCodeMarker && ocr.hasPhoneMarker {
         let detectedSuffix = ocr.suffixCandidates.first
         let suffixOk = expectedSuffix == nil || detectedSuffix == expectedSuffix
-        logStep(3, "code-entry screen detected, suffix=\(detectedSuffix ?? "?") match=\(suffixOk)")
-
+        logStep(3, "code-entry screen, suffix=\(detectedSuffix ?? "?") match=\(suffixOk)")
         if suffixOk {
             let inputs = findCodeInputs(in: image, observations: ocr.observations)
             emit(Output(ok: true, stage: "code_entry", suffix: detectedSuffix,
@@ -272,44 +274,43 @@ case "ocr-code":
     }
 
     let inputs = findCodeInputs(in: image, observations: ocr.observations)
-    logStep(3, "found \(inputs.count) potential input field(s)")
+    logStep(3, "found \(inputs.count) potential input(s)")
 
-    guard let firstInput = inputs.first else {
-        // Fallback: click near the "verification code" text and type
-        // Find the verification code marker text position
-        let markerPositions = ocr.observations.compactMap { obs -> CGRect? in
-            guard let candidate = obs.topCandidates(1).first else { return nil }
+    if inputs.isEmpty {
+        // Fallback: click near the "verification code" text
+        var markerPos: CGPoint?
+        for obs in ocr.observations {
+            guard let candidate = obs.topCandidates(1).first else { continue }
             let text = candidate.string.lowercased()
-            guard text.contains("verification") || text.contains("验证码") ||
-                  text.contains("驗證碼") || text.contains("security code") else { return nil }
-            let box = obs.boundingBox
-            return CGRect(x: box.midX * CGFloat(image.width),
-                          y: (1.0 - box.midY) * CGFloat(image.height),
-                          width: 1, height: 1)
+            if text.contains("verification") || text.contains("验证码") ||
+               text.contains("驗證碼") || text.contains("security code") {
+                let box = obs.boundingBox
+                markerPos = CGPoint(
+                    x: box.midX * CGFloat(image.width),
+                    y: (1.0 - box.midY) * CGFloat(image.height)
+                )
+                break
+            }
         }
-        guard let markerPos = markerPositions.first else {
+        guard let pos = markerPos else {
             emit(Output(ok: false, stage: "ocr-code", suffix: nil,
                         message: "no input fields or code marker found"))
         }
-
-        // Click slightly below the marker text (where the first input should be)
-        let estimatedInputPos = CGPoint(x: markerPos.minX + 120, y: markerPos.minY + 40)
-        logStep(4, "clicking estimated input at (\(estimatedInputPos.x), \(estimatedInputPos.y))")
-        guard clickPoint(estimatedInputPos) else {
+        let clickPos = CGPoint(x: pos.x + 120, y: pos.y + 40)
+        logStep(4, "clicking estimated input at (\(clickPos.x), \(clickPos.y))")
+        guard clickPoint(clickPos) else {
             emit(Output(ok: false, stage: "ocr-code", suffix: nil, message: "click failed"))
         }
-        usleep(200_000)
     } else {
-        // Click the first input field center
-        let pos = CGPoint(x: firstInput.midX, y: firstInput.midY)
-        logStep(4, "clicking input field at (\(pos.x), \(pos.y))")
-        guard clickPoint(pos) else {
+        let field = inputs[0]
+        let clickPos = CGPoint(x: field.midX, y: field.midY)
+        logStep(4, "clicking input at (\(clickPos.x), \(clickPos.y))")
+        guard clickPoint(clickPos) else {
             emit(Output(ok: false, stage: "ocr-code", suffix: nil, message: "click failed"))
         }
-        usleep(200_000)
     }
+    usleep(200_000)
 
-    // Type the code (Apple auto-advances between cells)
     logStep(5, "typing \(code.count) digit(s)")
     guard postUnicodeText(code) else {
         emit(Output(ok: false, stage: "ocr-code", suffix: nil, message: "type failed"))

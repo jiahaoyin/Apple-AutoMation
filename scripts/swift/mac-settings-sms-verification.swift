@@ -246,7 +246,7 @@ private func activeSystemSettings() -> NSRunningApplication? {
         isTrustedAppleIDSettingsExtension
     )
     if extensions.count == 1 { return extensions[0] }
-    guard extensions.isEmpty else {
+    if !extensions.isEmpty {
         // Multiple extension processes — fall back to the host app.
         logStep(10, "activeSettings: \(extensions.count) extension(s), falling back to host")
     }
