@@ -127,8 +127,6 @@ recordAccountHomeAcceptanceMarker() 只在 browserLogin.accountHomeConfirmed=tru
 | npm.cmd run -s test:release-copy-paths | 分发包、release README、当前运行手册与关键文档合同。 |
 | git diff --check | 空白符与补丁基础检查。 |
 
-Windows 只运行 Windows-safe 回归，不执行真实 Apple 登录。Mac 只在当前精确 push 的 SHA 上做只读/受监督验证；流程见 docs/WINDOWS_MAC_CODEX.md。
-
 ## 8. 故障归属
 
 | 状态/现象 | 拥有模块 | 首个排查文件 |
@@ -145,8 +143,5 @@ Windows 只运行 Windows-safe 回归，不执行真实 Apple 登录。Mac 只�
 
 - [README](../README.md)：最短的上手、模式、产物与入口。
 - [运行手册](RUNTIME_RUNBOOK.md)：当前行为、验收和排错唯一入口。
-- [Mac 交接](MAC_CODEX_HANDOFF.md)：Mac 安全验证与回传。
-- [Windows → Mac](WINDOWS_MAC_CODEX.md)：同步、sandbox、受监督 GUI 和证据。
-- docs/superpowers/plans/：历史实现决策；不替代当前运行手册。
 
 每次实现改变执行顺序、环境变量、截图、固定状态、报告字段或测试入口时，至少同步 README、运行手册、项目参考、release README 和静态文档合同测试。

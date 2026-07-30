@@ -87,8 +87,6 @@ export const COPY_PATHS = [
   "docs/RUNTIME_RUNBOOK.md",
   "docs/PROJECT.md",
   "docs/2FA_HANDOFF_DIAGNOSTICS.md",
-  "docs/MAC_CODEX_HANDOFF.md",
-  "docs/WINDOWS_MAC_CODEX.md",
 ];
 
 function normalizeRelPath(relPath) {

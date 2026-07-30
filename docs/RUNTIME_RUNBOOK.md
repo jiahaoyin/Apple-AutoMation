@@ -193,22 +193,7 @@ twofa_code_delivery_started
 | 2FA 窗口已关但终端仍显示旧提示 | popup 清理是独立的尽力收尾；看 collector 固定结果，不要以 UI 消失单独判断失败。 | 2fa-audit.jsonl 的 provider completion/cleanup。 |
 | target_resolved 之后无 input_completed | OTP 控件已经找到，但 BiDi 输入确认未完成。 | 2FA_HANDOFF_DIAGNOSTICS.md 与 owner frame / empty-cell guards。 |
 
-## 9. Windows 开发与 Mac 验证
-
-Windows 修改、测试、提交、推送；Mac 只验证**已推送的精确 SHA**。真实 Apple 登录、人工 2FA 与 GUI 会话仅在用户明确监督的 Mac 验证中执行。常规 Windows 回归不跑真实登录：
-
-~~~powershell
-npm.cmd run -s test:account-browser-flow
-npm.cmd run -s test:ruyipage-protocol
-npm.cmd run -s test:ruyipage-flow
-npm.cmd run -s test:flow-audit
-npm.cmd run -s test:release-copy-paths
-git diff --check
-~~~
-
-Mac 同步、只读 sandbox、受监督 GUI、回传证据与重测规则见 [Windows → Mac 调度手册](WINDOWS_MAC_CODEX.md) 和 [Mac 交接](MAC_CODEX_HANDOFF.md)。
-
-## 10. 维护规则
+## 9. 维护规则
 
 - 先改拥有该状态的最小模块，再加定点测试；不要为了一个状态缺口换浏览器框架。
 - 每次新增/改名固定状态，都要同步 flow-audit.jsonl、report.json sanitization、README/本手册及静态文档合同测试。

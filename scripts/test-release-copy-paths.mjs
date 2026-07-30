@@ -420,11 +420,6 @@ assert.match(
 );
 assert.match(
   generatedRunSh,
-  /terminal_debug="\$\(launcher_normalize_flag "\$\{APPLE_AUTOMATION_TERMINAL_DEBUG:-\}"\)"[\s\S]*supervised_gui="\$\(launcher_trim_value "\$\{APPLE_AUTOMATION_SUPERVISED_GUI:-\}"\)"/,
-  "launcher must mirror the Node runtime and supervised diagnostic switches"
-);
-assert.match(
-  generatedRunSh,
   /launcher_pre_audit_failure\(\) \{\s*printf '\[×\] 启动失败（阶段：launcher_entered，退出码：1）\\n' >&2 \|\| true\s*printf '\[日志\] 启动审计尚未创建\\n' >&2 \|\| true\s*exit 1\s*\}/,
   "launcher failures before audit creation must still produce a fixed terminal summary"
 );
@@ -594,8 +589,6 @@ for (const rel of [
   "docs/RUNTIME_RUNBOOK.md",
   "docs/PROJECT.md",
   "docs/2FA_HANDOFF_DIAGNOSTICS.md",
-  "docs/MAC_CODEX_HANDOFF.md",
-  "docs/WINDOWS_MAC_CODEX.md",
 ]) {
   assert.ok(COPY_PATHS.includes(rel), `release package must include ${rel}`);
 }
@@ -609,14 +602,6 @@ const runtimeRunbook = fs.readFileSync(
   "utf-8"
 );
 const projectReference = fs.readFileSync(new URL("../docs/PROJECT.md", import.meta.url), "utf-8");
-const macHandoff = fs.readFileSync(
-  new URL("../docs/MAC_CODEX_HANDOFF.md", import.meta.url),
-  "utf-8"
-);
-const windowsMacGuide = fs.readFileSync(
-  new URL("../docs/WINDOWS_MAC_CODEX.md", import.meta.url),
-  "utf-8"
-);
 for (const [label, documentSource] of [
   ["repository README", repositoryReadme],
   ["runtime runbook", runtimeRunbook],
@@ -638,10 +623,6 @@ assert.match(
 assert.doesNotMatch(environmentExample, /优先复用已打开的 account\.apple\.com 标签页/);
 assert.match(runtimeRunbook, /developer_membership_gate_blocked/);
 assert.match(projectReference, /recordAccountHomeAcceptanceMarker/);
-assert.match(macHandoff, /Developer-first/);
-assert.match(macHandoff, /DEVELOPER_MEMBERSHIP_GATE=1/);
-assert.match(windowsMacGuide, /developer_membership_gate/);
-assert.match(windowsMacGuide, /acceptance_marker_skipped/);
 assert.match(releaseBuilder, /"docs\/RUNTIME_RUNBOOK\.md"/);
 assert.match(
   releaseBuilder,

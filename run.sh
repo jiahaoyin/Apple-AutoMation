@@ -68,7 +68,7 @@ fi
 
 launcher_stage_token_valid() {
   case "$1" in
-    launcher_entered|launcher_bootstrap_started|launcher_bootstrap_ready|launcher_env_setup_started|launcher_env_setup_skipped|launcher_env_setup_ready|launcher_preflight_started|launcher_preflight_skipped|launcher_preflight_ready|flow_main_started|credentials_ready|apple_flow_exec|apple_flow_completed|settings_smoke_exec|settings_smoke_completed|failure) return 0 ;;
+    launcher_entered|launcher_bootstrap_started|launcher_bootstrap_ready|launcher_env_setup_started|launcher_env_setup_skipped|launcher_env_setup_ready|launcher_preflight_started|launcher_preflight_skipped|launcher_preflight_ready|flow_main_started|credentials_ready|apple_flow_exec|apple_flow_completed|failure) return 0 ;;
   esac
   return 1
 }
@@ -145,16 +145,6 @@ for arg in "$@"; do
     skip_mac=1
   fi
 done
-
-if [[ "${APPLE_AUTOMATION_SETTINGS_SMOKE:-}" == "1" ]]; then
-  if [[ "${skip_mac}" != "1" || "${skip_browser}" == "1" ]]; then
-    exit 1
-  fi
-  launcher_stage settings_smoke_exec
-  node scripts/supervised-settings-2fa-smoke.mjs
-  launcher_stage settings_smoke_completed
-  exit 0
-fi
 
 if [[ "${SKIP_ENV_SETUP:-}" != "1" ]]; then
   launcher_stage launcher_env_setup_started

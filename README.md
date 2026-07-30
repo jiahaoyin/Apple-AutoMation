@@ -153,8 +153,6 @@ BROWSER_2FA_POLL_MS=800
 - [运行手册](docs/RUNTIME_RUNBOOK.md) — 当前流程、状态机、日志、gate、人工验收与故障矩阵。
 - [项目参考](docs/PROJECT.md) — 架构、模块边界、数据与测试契约。
 - [2FA 交接诊断](docs/2FA_HANDOFF_DIAGNOSTICS.md) — OTP 获取到网页提交的固定检查点。
-- [Mac 交接](docs/MAC_CODEX_HANDOFF.md) — Mac 只读验证与安全证据反馈。
-- [Windows → Mac 调度](docs/WINDOWS_MAC_CODEX.md) — 精确 SHA 同步、受监督 GUI 与证据回传。
 
 ## 安全与发布
 

@@ -28,10 +28,6 @@
     "test:2fa-sidecar": "node scripts/test-two-fa-sidecar.mjs",
     "test:2fa-settings-unit": "node scripts/test-mac-settings-2fa.mjs",
     "test:mac-settings-sms-verification": "node scripts/test-mac-settings-sms-verification.mjs && node scripts/test-mac-settings-sms-provider.mjs && node scripts/test-mac-settings-sms-provider-coordinator.mjs && node scripts/test-mac-settings-sms-provider-config.mjs",
-    "test:mac-settings-login-selector": "node scripts/test-mac-settings-login-selector.mjs",
-    "test:mac-settings-login-observability": "node scripts/test-mac-settings-login-observability.mjs",
-    "test:mac-settings-post-sms-finalization": "node scripts/test-mac-settings-post-sms-finalization.mjs",
-    "test:supervised-settings-smoke": "node scripts/test-supervised-settings-2fa-smoke.mjs",
     "test:account-browser-flow": "node scripts/test-account-browser-flow.mjs",
     "test:flow-audit": "node scripts/test-flow-audit.mjs",
     "test:browser-backend": "node scripts/test-browser-backend.mjs",
@@ -39,9 +35,6 @@
     "test:ruyipage-protocol": "node scripts/test-ruyipage-protocol.mjs",
     "test:ruyipage-flow": "node scripts/test-ruyipage-flow.mjs",
     "test:python-bootstrap": "node scripts/test-python-bootstrap.mjs",
-    "mac:codex": "node scripts/mac-codex-orchestrator.mjs",
-    "test:mac-codex": "node scripts/test-mac-codex-orchestrator.mjs && node scripts/test-supervised-browser-broker.mjs",
-    "test:firefox-profile": "node scripts/test-firefox-profile-mode.mjs",
     "test:release-copy-paths": "node scripts/test-release-copy-paths.mjs"
   }
 }
