@@ -22,7 +22,7 @@ function boundedPositive(value, fallback) {
 }
 
 export function isMacSettingsPostSmsFinalizationEnabled(env = process.env) {
-  return env.APPLE_AUTOMATION_POST_SMS_FINALIZATION_ENABLED === "1";
+  return env.APPLE_AUTOMATION_POST_SMS_FINALIZATION_ENABLED !== "0";
 }
 
 export function normalizeMacSettingsPostSmsState(value) {

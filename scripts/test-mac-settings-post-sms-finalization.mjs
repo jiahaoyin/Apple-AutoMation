@@ -18,7 +18,7 @@ import {
 
 const binding = { axOwnerPid: 401, visualOwnerPid: 402, windowId: 403 };
 
-assert.equal(isMacSettingsPostSmsFinalizationEnabled({}), false);
+assert.equal(isMacSettingsPostSmsFinalizationEnabled({}), true);
 assert.equal(
   isMacSettingsPostSmsFinalizationEnabled({ APPLE_AUTOMATION_POST_SMS_FINALIZATION_ENABLED: "1" }),
   true

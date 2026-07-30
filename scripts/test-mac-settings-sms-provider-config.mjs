@@ -13,7 +13,7 @@ import {
 } from "./lib/mac-settings-login.js";
 import { sanitizedAxFillChildEnv } from "./lib/mac-settings-ax-fill.js";
 
-assert.equal(isMacSettingsSmsRuntimeEnabled({}), false);
+assert.equal(isMacSettingsSmsRuntimeEnabled({}), true);
 assert.equal(isMacSettingsSmsRuntimeEnabled({ APPLE_AUTOMATION_SMS_ENABLED: "1" }), true);
 assert.equal(isMacSettingsSmsRuntimeEnabled({ APPLE_AUTOMATION_SMS_PHONE: "+8613800130051" }), true);
 assert.equal(isMacSettingsSmsRuntimeEnabled({ APPLE_AUTOMATION_SMS_API_URL: "https://example.test/record?token=private" }), true);

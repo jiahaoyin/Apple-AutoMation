@@ -546,7 +546,7 @@ assert.match(
 const envExample = fs.readFileSync(new URL("../.env.example", import.meta.url), "utf-8");
 assert.match(envExample, /运行 \.\/run\.sh/);
 assert.doesNotMatch(envExample, /杩愯/);
-assert.match(envExample, /^APPLE_AUTOMATION_SMS_ENABLED=0$/m);
+assert.match(envExample, /^APPLE_AUTOMATION_SMS_ENABLED=1$/m);
 assert.match(envExample, /^APPLE_AUTOMATION_SMS_PHONE=$/m);
 assert.match(envExample, /^APPLE_AUTOMATION_SMS_API_URL=$/m);
 assert.match(envExample, /^APPLE_AUTOMATION_SMS_RECONFIGURE=0$/m);

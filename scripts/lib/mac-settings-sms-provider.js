@@ -4,9 +4,9 @@ import { stdin as input, stdout as output } from "node:process";
 const SIX_DIGIT_CODE_RE = /(?<!\d)(\d{6})(?!\d)/g;
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const FIXED_INCOMPLETE_CONFIG_NOTICE =
-  "[SMS] Phone number and provider URL must be entered together. Please enter both again.";
+  "[短信验证] 号码和服务地址需要一起提供，请重新输入";
 const FIXED_INVALID_CONFIG_NOTICE =
-  "[SMS] Phone number or provider URL is invalid. Please enter both again.";
+  "[短信验证] 号码或服务地址格式无效，请重新输入";
 const SMS_RUNTIME_SECRET_ENV_KEYS = [
   "APPLE_AUTOMATION_SMS_PHONE",
   "APPLE_AUTOMATION_SMS_API_URL",
@@ -130,7 +130,7 @@ async function promptForSecretLine(label) {
       input.on("data", onData);
       input.once("error", onError);
       input.resume();
-      output.write(`[SMS] ${label}: `);
+      output.write(`[短信验证] ${label}: `);
     } catch {
       finish(null);
     }
@@ -139,12 +139,12 @@ async function promptForSecretLine(label) {
 
 export async function promptForMacSettingsSmsProviderField({ field, secret }) {
   if (input.isTTY !== true || output.isTTY !== true) return null;
-  const label = field === "phone" ? "Trusted phone number" : "Private SMS provider HTTPS URL";
+  const label = field === "phone" ? "受信任手机号码" : "短信服务 HTTPS 地址";
   if (secret === true) return promptForSecretLine(`${label} (hidden)`);
   const rl = readline.createInterface({ input, output, terminal: true });
   try {
     // This runtime-only prompt never writes the value to shell history or project files.
-    return await rl.question(`[SMS] ${label}: `);
+    return await rl.question(`[短信验证] ${label}: `);
   } finally {
     rl.close();
   }
@@ -181,7 +181,7 @@ export async function resolveMacSettingsSmsProviderConfig(options = {}) {
     }
 
     if (forceReconfigure && !reconfigureNoticeShown) {
-      notify("[SMS] Reconfiguration requested. Enter a replacement phone number and provider URL.");
+      notify("[短信验证] 已请求重新配置，请输入新的号码和服务地址");
       reconfigureNoticeShown = true;
     }
 

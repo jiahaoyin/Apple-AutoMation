@@ -293,11 +293,9 @@ export async function isMacSettingsSignedIn() {
 export function isMacSettingsSmsRuntimeEnabled(env = process.env) {
   if (env.APPLE_AUTOMATION_SMS_RECONFIGURE === "1") return true;
   if (env.APPLE_AUTOMATION_SMS_ENABLED === "0") return false;
-  if (env.APPLE_AUTOMATION_SMS_ENABLED === "1") return true;
-  return (
-    Boolean(env.APPLE_AUTOMATION_SMS_PHONE?.trim()) ||
-    Boolean(env.APPLE_AUTOMATION_SMS_API_URL?.trim())
-  );
+  // Default on: SMS automation is enabled unless explicitly disabled.
+  // Existing stored phone/URL or terminal prompt will provide credentials.
+  return true;
 }
 
 /**
@@ -467,7 +465,7 @@ export async function runMacSettingsLoginPhase(creds, options = {}) {
   if (smsConfig?.source === "terminal") {
     try {
       saveMacSettingsSmsProviderConfig(smsConfig);
-      console.log("[Mac Settings][SMS] SMS provider configuration saved to .env.");
+      console.log("[短信验证] 短信服务配置已保存至 .env");
     } catch {
       throw new Error("MAC_SETTINGS_SMS_CONFIG_SAVE_FAILED");
     }
@@ -478,21 +476,21 @@ export async function runMacSettingsLoginPhase(creds, options = {}) {
   if (smsConfig) {
     if (!isMacSettingsSmsHelperAvailable()) {
       console.warn(
-        "[Mac Settings][SMS] Native SMS helper is unavailable; complete SMS verification manually in System Settings."
+        "[短信验证] 原生短信助手不可用，请在系统设置中手动完成短信验证"
       );
     } else {
-      console.log("[Mac Settings][SMS] Waiting for the trusted destination and code entry.");
+      console.log("[短信验证] 等待短信验证界面出现…");
       await completeSupervisedMacSettingsSmsVerification({
         phoneNumber: smsConfig.phoneNumber,
         codeProvider: createSmsProviderCodePoller(smsConfig),
         supervised: true,
       });
       console.log(
-        "[Mac Settings][SMS] Verification code submitted. Apple will continue automatically; finish any remaining screens in System Settings."
+        "[短信验证] 验证码已提交，Apple 将自动继续；请在系统设置中完成剩余步骤"
       );
     }
   } else {
-    console.log("\n[Mac Settings] Credentials submitted. Complete SMS verification manually if shown.");
+    console.log("\n[Mac 设置] 账号密码已提交，如有短信验证请手动完成");
   }
   const postSmsEnabled = isMacSettingsPostSmsFinalizationEnabled(smsEnv);
   await waitForMacSettingsLoginComplete({
