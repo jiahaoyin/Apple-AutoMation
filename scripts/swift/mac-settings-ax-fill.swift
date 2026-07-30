@@ -586,9 +586,84 @@ func focusAndSetLoginValue(
         )
     }
 
+    // Email fields must use real keyboard events. Setting AXValue alone does
+    // not trigger the System Settings form validation that enables the Continue
+    // button. Keyboard input produces the keystrokes that the form listens for.
+    if isEmail {
+        let originalEmailValue = axString(liveHit.element, kAXValueAttribute as String)
+
+        // Focus the text field with a click, then type the email character by
+        // character through the HID event tap.
+        if let keyboardHit = resolveFocusedLoginTextField(
+            appElement: appElement,
+            state: state,
+            identifier: identifier
+        ), isEnabledAndFocused(keyboardHit.element) {
+            // Select all existing text so the typed value replaces it.
+            postCmdA()
+            usleep(100_000)
+
+            if let beforeTypeHit = activeFocusedLoginControl(
+                appElement: appElement,
+                state: state,
+                identifier: identifier,
+                matches: isTextInput
+            ), isEnabledAndFocused(beforeTypeHit.element),
+               postUnicodeText(text),
+               waitForLoginValueMatch(
+                   appElement: appElement,
+                   state: state,
+                   identifier: identifier,
+                   text: text,
+                   isEmail: true,
+                   previousValue: originalEmailValue,
+                   requireValueChange: false
+               ) {
+                return LoginValueInputResult(
+                    ok: true,
+                    route: "keyboard",
+                    reason: "verified"
+                )
+            }
+        }
+        // Keyboard path did not confirm the value. Try AXValue as a fallback
+        // so the credential is at least visible for manual inspection.
+        let beforeAxFallback = originalEmailValue ?? ""
+        let axResult = AXUIElementSetAttributeValue(
+            liveHit.element,
+            kAXValueAttribute as CFString,
+            text as CFString
+        )
+        if axResult == .success,
+           waitForLoginValueMatch(
+               appElement: appElement,
+               state: state,
+               identifier: identifier,
+               text: text,
+               isEmail: true,
+               previousValue: beforeAxFallback,
+               requireValueChange: false
+           ) {
+            return LoginValueInputResult(
+                ok: true,
+                route: "ax_value",
+                reason: "verified"
+            )
+        }
+        return LoginValueInputResult(
+            ok: false,
+            route: axResult == .success ? "ax_value" : nil,
+            reason: axResult == .success
+                ? "ax_value_unconfirmed"
+                : "keyboard_unconfirmed"
+        )
+    }
+
+    // --- Password path (AXValue-first, keyboard fallback) ---
+
     let originalValue = axString(liveHit.element, kAXValueAttribute as String)
     var valueBeforeWrite = originalValue
-    if !isEmail, let originalValue, !originalValue.isEmpty {
+    if let originalValue, !originalValue.isEmpty {
         let clearResult = AXUIElementSetAttributeValue(
             liveHit.element,
             kAXValueAttribute as CFString,
@@ -623,9 +698,9 @@ func focusAndSetLoginValue(
            state: state,
            identifier: identifier,
            text: text,
-           isEmail: isEmail,
+           isEmail: false,
            previousValue: valueBeforeWrite,
-           requireValueChange: !isEmail
+           requireValueChange: true
        ) {
         return LoginValueInputResult(
             ok: true,
@@ -681,9 +756,9 @@ func focusAndSetLoginValue(
         state: state,
         identifier: identifier,
         text: text,
-        isEmail: isEmail,
+        isEmail: false,
         previousValue: valueBeforeWrite,
-        requireValueChange: !isEmail
+        requireValueChange: true
     ) {
         return LoginValueInputResult(
             ok: true,
