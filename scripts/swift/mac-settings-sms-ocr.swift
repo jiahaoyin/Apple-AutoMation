@@ -51,14 +51,35 @@ func captureMainDisplayImage() -> CGImage? {
         logStep(0, "screen recording permission missing")
         return nil
     }
-    // Use ScreenCaptureKit to capture the main display.
-    // SCStream requires an async callback; for a short-lived CLI helper
-    // we capture the screen synchronously via the shared workspace.
-    guard let displayID = CGMainDisplayID() as CGDirectDisplayID? else { return nil }
-    // CGDisplayCreateImage is deprecated on macOS 15 but still available
-    // for CLI helpers that cannot use the SCStream async API.
-    let image = CGDisplayCreateImage(displayID)
-    return image
+    // Use ScreenCaptureKit's synchronous capture API via a semaphore.
+    let semaphore = DispatchSemaphore(value: 0)
+    var resultImage: CGImage?
+    Task {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: false
+            )
+            guard let display = content.displays.first else {
+                semaphore.signal()
+                return
+            }
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let config = SCStreamConfiguration()
+            let scale = CGFloat(display.width) / CGFloat(display.width)  // 1x
+            config.width = display.width
+            config.height = display.height
+            config.showsCursor = false
+            resultImage = try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: config
+            )
+        } catch {
+            logStep(0, "capture failed: \(error.localizedDescription)")
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
+    return resultImage
 }
 
 // ── OCR ─────────────────────────────────────────────────────────────
