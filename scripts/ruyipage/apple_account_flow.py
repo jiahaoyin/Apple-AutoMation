@@ -4406,12 +4406,26 @@ def wait_for_signed_in(
                 or is_account_manage_url(current_href)
             )
             if is_developer_account_url(current_href):
-                # Developer account page reached — login definitely succeeded.
+                # Developer account page reached — but give the page a
+                # moment to hydrate its account-shell markup so the
+                # session probe can confirm membership details.
+                if session_probe is not None:
+                    human_pause(400, 800)
+                    direct_state = session_probe(page)
+                    if direct_state is not None:
+                        observe_transition(direct_state)
+                        return direct_state
                 last_state["trusted"] = True
                 return last_state
             if not on_apple_surface:
                 # Empty or unrecognised URL with 2FA+trust gone — the page
                 # has transitioned away from the authentication flow.
+                if session_probe is not None:
+                    human_pause(400, 800)
+                    direct_state = session_probe(page)
+                    if direct_state is not None:
+                        observe_transition(direct_state)
+                        return direct_state
                 last_state["trusted"] = True
                 return last_state
         if last_state.get("error"):
