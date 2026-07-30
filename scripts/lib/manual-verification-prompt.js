@@ -28,6 +28,7 @@ export function promptForHiddenNumericValue(options = {}) {
     input = process.stdin,
     output = process.stdout,
     allowPipedOutput = process.env.APPLE_AUTOMATION_SUPERVISED_GUI === "1",
+    allowEmpty = false,
     setTimeout: schedule = globalThis.setTimeout,
     clearTimeout: cancel = globalThis.clearTimeout,
   } = options;
@@ -109,6 +110,10 @@ export function promptForHiddenNumericValue(options = {}) {
           continue;
         }
         if (character === "\r" || character === "\n") {
+          if (options.allowEmpty === true && entry.length === 0) {
+            finish("");
+            return;
+          }
           if (/^[0-9]+$/.test(entry) && lengths.has(entry.length)) {
             finish(entry);
             return;

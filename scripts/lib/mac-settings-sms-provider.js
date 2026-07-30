@@ -338,9 +338,27 @@ export function createSmsProviderCodePoller(config, options = {}) {
         const timer = setTimeout(() => controller.abort(), Math.min(15_000, remainingMs));
         let response;
         try {
-          response = await request(providerUrl, { method: "GET", redirect: "error", signal: controller.signal, headers: { accept: "application/json, text/plain, text/html" } });
+          response = await request(providerUrl, {
+            method: "GET",
+            redirect: "error",
+            signal: controller.signal,
+            headers: {
+              accept: "application/json, text/plain, text/html;q=0.9, */*;q=0.8",
+              "accept-language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+              "user-agent":
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) " +
+                "Version/18.0 Safari/605.1.15",
+              "sec-fetch-dest": "empty",
+              "sec-fetch-mode": "cors",
+              "sec-fetch-site": "none",
+            },
+          });
           if (response?.ok) {
-            const code = extractSmsVerificationCode(await readBoundedBody(response, controller.signal), suffix);
+            const code = extractSmsVerificationCode(
+              await readBoundedBody(response, controller.signal),
+              suffix
+            );
             if (code) return code;
           }
         } finally { clearTimeout(timer); }
