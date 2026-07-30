@@ -11,6 +11,10 @@ private struct Output: Codable {
     let stage: String
 }
 
+private func logStep(_ n: Int, _ msg: String) {
+    FileHandle.standardError.write("[sms-step \(n)] \(msg)\n".data(using: .utf8)!)
+}
+
 private enum CodeEntry {
     case single(AXUIElement)
     case six([AXUIElement])
@@ -43,6 +47,18 @@ private let continueLabels: Set<String> = [
     "next",
     "\u{7EE7}\u{7EED}",
     "\u{7E7C}\u{7E8C}",
+]
+
+// macOS 15 System Settings uses SwiftUI which may render phone-selection
+// controls as buttons, cells, or static-text rows rather than traditional
+// radio buttons. Accept any interactive role that can receive a press.
+private let phoneControlRoles: Set<String> = [
+    kAXRadioButtonRole as String,
+    kAXCheckBoxRole as String,
+    kAXButtonRole as String,
+    "AXCell",
+    "AXStaticText",
+    "AXGroup",
 ]
 
 private let codeMarkers = [
@@ -273,10 +289,15 @@ private func asciiDigits(in text: String) -> String {
 
 private func isSelectablePhoneControl(_ element: AXUIElement, pid: pid_t) -> Bool {
     let role = axRole(element)
-    guard role == kAXRadioButtonRole as String || role == kAXCheckBoxRole as String else {
+    guard phoneControlRoles.contains(role) else {
         return false
     }
-    guard isEnabled(element), supportsPress(element) else { return false }
+    // Static text rows and groups need explicit press support to confirm
+    // they are interactive controls rather than passive labels.
+    if role == "AXStaticText" || role == "AXGroup" {
+        guard supportsPress(element) else { return false }
+    }
+    guard isEnabled(element) else { return false }
     let texts = textInSubtree(element, pid: pid)
     guard asciiDigits(in: texts.joined(separator: " ")).count >= 2 else { return false }
     return texts.contains { text in
@@ -505,6 +526,7 @@ case "sms-state":
         emit(false, "suffix_invalid")
     }
     let snapshots = currentSnapshots()
+    logStep(1, "sms-state: \(snapshots.count) surface(s), \(snapshots.map { $0.nodes.count }.reduce(0, +)) node(s)")
     guard !snapshots.isEmpty else {
         emit(true, "waiting")
     }
@@ -515,6 +537,7 @@ case "sms-state":
     let phoneSnapshots = snapshots.filter {
         phoneSelection(in: $0.nodes, pid: $0.pid) != nil
     }
+    logStep(2, "sms-state: code=\(codeSnapshots.count) phone=\(phoneSnapshots.count)")
     if codeSnapshots.count == 1, phoneSnapshots.isEmpty {
         emit(true, "code_entry")
     }
@@ -534,11 +557,13 @@ case "sms-select":
         }
         return (snapshot, selection)
     }
+    logStep(3, "sms-select: \(selections.count) selection surface(s)")
     guard selections.count == 1 else {
         emit(false, "phone_selection_unavailable")
     }
     let selectionSnapshot = selections[0].0
     let selection = selections[0].1
+    logStep(4, "sms-select: \(selection.controls.count) phone control(s), suffix=\(suffix)")
     let matches = selection.controls.filter { control in
         textInSubtree(control, pid: selectionSnapshot.pid).contains { text in
             asciiDigits(in: text).hasSuffix(suffix)
@@ -550,6 +575,7 @@ case "sms-select":
     guard selectPhone(matches[0]) else {
         emit(false, "selection_not_confirmed")
     }
+    logStep(5, "sms-select: phone selected")
     emit(true, "selected")
 
 case "sms-continue":
@@ -580,6 +606,7 @@ case "sms-continue":
     guard AXUIElementPerformAction(selection.continueButton, kAXPressAction as CFString) == .success else {
         emit(false, "continue_failed")
     }
+    logStep(6, "sms-continue: button pressed")
     emit(true, "continued")
 
 case "sms-code":
@@ -591,6 +618,7 @@ case "sms-code":
       emit(false, "manual_code_invalid")
     }
     let entries = matchingCodeEntries(suffix: suffix)
+    logStep(7, "sms-code: \(entries.count) code entry match(es)")
     guard entries.count == 1 else {
         emit(false, "code_entry_unavailable")
     }

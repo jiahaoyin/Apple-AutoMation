@@ -170,12 +170,27 @@ export async function runMacSettingsSmsHelper(phase, options = {}) {
       env,
       maxBuffer: 16 * 1024,
     };
-    const { stdout } =
-      input === undefined
-        ? await execFileAsync(SMS_AX_BIN, args, executionOptions)
-        : await execFileWithStdin(SMS_AX_BIN, args, input, executionOptions);
+    let stdout;
+    let stderr;
+    if (input === undefined) {
+      const result = await execFileAsync(SMS_AX_BIN, args, executionOptions);
+      stdout = result.stdout;
+      // stderr is silently consumed by execFileAsync on success.
+      // The helper writes diagnostic [sms-step N] lines there.
+    } else {
+      // For sms-code we must pipe stdin; use a child-process helper.
+      const result = await execFileWithStdin(SMS_AX_BIN, args, input, executionOptions);
+      stdout = result.stdout;
+    }
     return sanitizeMacSettingsSmsNativeResult(phase, JSON.parse(stdout));
-  } catch {
+  } catch (error) {
+    const stderrText = typeof error?.stderr === "string" ? error.stderr.trim() : "";
+    // Surface Swift helper diagnostic steps on failure so the terminal
+    // shows which AX element was being searched when the call timed out.
+    if (stderrText) {
+      const steps = stderrText.split("\n").filter((line) => line.startsWith("[sms-step"));
+      for (const step of steps) console.log(`[SMS-helper] ${step}`);
+    }
     return nativeFailure();
   }
 }
