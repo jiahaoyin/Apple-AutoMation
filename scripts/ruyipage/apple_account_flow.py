@@ -4391,16 +4391,15 @@ def wait_for_signed_in(
             last_state["trusted"] = True
             return last_state
         if (
-            last_state.get("rootAccountMarker")
-            and is_developer_account_url(str(last_state.get("href") or ""))
-            and not last_state.get("twofa")
+            not last_state.get("twofa")
             and not last_state.get("trustPrompt")
+            and submitted
+            and is_developer_account_url(str(last_state.get("href") or ""))
         ):
-            # The Developer account shell has loaded and a root account marker
-            # is present. Any lingering error flag at this point is a false
-            # positive from a retiring Apple ID child iframe, not a real
-            # authentication failure. Accept the transition to avoid timing out
-            # on a visibly successful page.
+            # After OTP submission and trust handling, the page has reached
+            # the Developer account URL. Any lingering error flag is a false
+            # positive from a retiring idmsa iframe. Accept the transition
+            # so the flow can continue to membership detection.
             last_state["trusted"] = True
             return last_state
         if last_state.get("error"):
