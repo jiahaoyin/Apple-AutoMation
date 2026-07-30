@@ -246,10 +246,25 @@ private func activeSystemSettings() -> NSRunningApplication? {
         isTrustedAppleIDSettingsExtension
     )
     if extensions.count == 1 { return extensions[0] }
-    guard extensions.isEmpty else { return nil }
-    let matches = NSWorkspace.shared.runningApplications.filter(isTrustedSystemSettingsHost)
-    guard matches.count == 1 else { return nil }
-    return matches[0]
+    guard extensions.isEmpty else {
+        // Multiple extension processes — fall back to the host app.
+        logStep(10, "activeSettings: \(extensions.count) extension(s), falling back to host")
+    }
+    let hostMatches = NSWorkspace.shared.runningApplications.filter(isTrustedSystemSettingsHost)
+    if hostMatches.count == 1 { return hostMatches[0] }
+    if hostMatches.isEmpty {
+        // Last resort: any running System Settings-like app.
+        let anyMatch = NSWorkspace.shared.runningApplications.first { app in
+            guard let bid = app.bundleIdentifier else { return false }
+            return settingsBundleIDs.contains(bid)
+        }
+        if let app = anyMatch {
+            logStep(11, "activeSettings: fallback to \(app.localizedName ?? "?") pid=\(app.processIdentifier)")
+            return app
+        }
+    }
+    logStep(12, "activeSettings: no match (hosts=\(hostMatches.count))")
+    return nil
 }
 
 private func roots(for appElement: AXUIElement, pid: pid_t) -> [AXUIElement] {

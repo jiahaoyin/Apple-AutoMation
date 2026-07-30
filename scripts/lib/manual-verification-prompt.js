@@ -146,9 +146,9 @@ export function promptForHiddenNumericValue(options = {}) {
 
 export function promptForHiddenVerificationCode(options = {}) {
   return promptForHiddenNumericValue({
+    prompt: VERIFICATION_PROMPT,
     ...options,
     allowedLengths: [6],
-    prompt: VERIFICATION_PROMPT,
   });
 }
 

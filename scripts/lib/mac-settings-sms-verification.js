@@ -283,13 +283,7 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
               if (filled?.ok === true) {
                 console.log("[短信验证] ✓ 验证码已提交");
               } else {
-                console.warn("[短信验证] 自动填写失败，请直接在系统设置中输入验证码");
-                console.warn("[短信验证] 完成后按回车 …");
-                await promptForHiddenVerificationCode({
-                  prompt: "[短信验证] 提交验证码后按回车继续",
-                  timeoutMs: readRemainingMs(deadline, now),
-                  allowEmpty: true,
-                }).catch(() => {});
+                console.warn("[短信验证] 自动填写失败，请在系统设置中直接输入验证码后手动提交");
               }
               return { status: "submitted" };
             }
