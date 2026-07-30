@@ -23,6 +23,7 @@ readonly REQUIRED_SWIFT_HELPERS=(
 readonly OPTIONAL_SWIFT_HELPERS=(
   "mac-settings-ax-fill"
   "mac-settings-sms-verification"
+  "mac-settings-sms-ocr"
   "mac-settings-post-sms-finalization"
 )
 readonly COMPILED_SWIFT_HELPERS=(
@@ -273,6 +274,18 @@ compile_swift_helpers() {
           echo "警告: 可选 Swift helper 编译失败: ${optional_helper}。iPhone 解锁视觉定位将保留人工处理。" >&2
           /bin/rm -f -- "$temp_dir/${optional_helper}"
           disable_optional_swift_helper "$optional_helper"
+        fi
+        ;;
+      mac-settings-sms-ocr)
+        if [[ -f "scripts/swift/${optional_helper}.swift" ]] &&
+          compile_swift_helper "$temp_dir" "$optional_helper" \
+            --optional \
+            -framework ApplicationServices -framework AppKit -framework Vision -framework CoreGraphics \
+            -framework ScreenCaptureKit; then
+          optional_compiled+=("$optional_helper")
+        else
+          echo "警告: 可选 Swift helper 编译失败: ${optional_helper}。SMS 验证码 OCR 回退不可用。" >&2
+          /bin/rm -f -- "$temp_dir/${optional_helper}"
         fi
         ;;
     esac

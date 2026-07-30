@@ -212,6 +212,7 @@ const requiredSwiftHelpers = [
 const optionalSwiftHelpers = [
   "mac-settings-ax-fill",
   "mac-settings-sms-verification",
+  "mac-settings-sms-ocr",
   "mac-settings-post-sms-finalization",
 ];
 const compiledSwiftHelpers = [

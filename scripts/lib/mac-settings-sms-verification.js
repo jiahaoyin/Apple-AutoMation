@@ -1,5 +1,6 @@
 import { promptForHiddenVerificationCode } from "./manual-verification-prompt.js";
 import { runMacSettingsSmsHelper } from "./mac-settings-sms-ax.js";
+import { runSmsOcrHelper, isSmsOcrHelperAvailable } from "./mac-settings-sms-ocr.js";
 import { sleep } from "./prompt.js";
 
 const VALID_STAGES = new Set(["phone_selection", "code_entry", "waiting"]);
@@ -88,6 +89,8 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
   let pollCount = 0;
   let waitingStartedAt = 0;
   let lastWaitProgressAt = 0;
+  let axWaitingCount = 0;
+  let ocrAvailable = isSmsOcrHelperAvailable();
 
   // ── helpers ──────────────────────────────────────────────────────────
 
@@ -143,7 +146,38 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
     // Reset the "stuck in waiting" tracker whenever we see a concrete stage.
     if (state.stage !== "waiting") {
       waitingStartedAt = 0;
+      axWaitingCount = 0;
       reportStage(state.stage);
+    }
+
+    // When AX keeps returning "waiting", try OCR as a fallback every ~8 polls
+    if (state.stage === "waiting" && ocrAvailable) {
+      axWaitingCount += 1;
+      if (axWaitingCount >= 8) {
+        axWaitingCount = 0;
+        console.log("[短信验证] 尝试 OCR 辅助检测界面状态 …");
+        try {
+          const ocrState = await runSmsOcrHelper("ocr-state", {
+            suffix,
+            timeoutMs: nativeCallTimeoutMs,
+          });
+          if (ocrState?.ok && ocrState.stage === "code_entry") {
+            console.log("[短信验证] OCR 检测到验证码输入界面 (尾号 " + (ocrState.suffix || "?") + ")");
+            // Treat OCR code_entry as authoritative — jump to code entry flow
+            state = { ok: true, stage: "code_entry" };
+            waitingStartedAt = 0;
+          } else if (ocrState?.ok && ocrState.stage === "phone_selection") {
+            console.log("[短信验证] OCR 检测到号码选择界面");
+            // Fall through to phone_selection handling below
+            state = { ok: true, stage: "phone_selection" };
+            waitingStartedAt = 0;
+          } else {
+            console.log("[短信验证] OCR 未能确定界面状态: " + (ocrState?.message || "unknown"));
+          }
+        } catch {
+          console.log("[短信验证] OCR 调用失败，继续使用 AX 检测");
+        }
+      }
     }
 
     // ── phone selection ────────────────────────────────────────────────
@@ -231,20 +265,26 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
         console.log("[短信验证] ✓ 已接受手动输入的验证码");
       }
 
-      // Fill the code via the native helper
-      const filled = await invokeNative("sms-code", { code, suffix });
-      if (filled?.ok !== true) {
-        console.warn("[短信验证] 自动填写验证码失败，请直接在系统设置中输入");
-        console.warn("[短信验证] 完成后按回车…");
+      // Fill the code via the native helper (AX first, OCR fallback)
+      let filled = await invokeNative("sms-code", { code, suffix });
+      if (filled?.ok !== true && ocrAvailable) {
+        console.log("[短信验证] AX 填写失败，尝试 OCR 辅助键入 …");
         try {
-          await promptForHiddenVerificationCode({
-            prompt: "[短信验证] 在系统设置中输入验证码后，按回车继续",
-            timeoutMs: readRemainingMs(deadline, now),
-            allowEmpty: true,
+          const ocrCodeResult = await runSmsOcrHelper("ocr-code", {
+            code,
+            suffix,
+            timeoutMs: nativeCallTimeoutMs,
           });
+          if (ocrCodeResult?.ok && ocrCodeResult.stage === "code_submitted") {
+            console.log("[短信验证] ✓ OCR 已键入验证码");
+            filled = { ok: true, stage: "code_submitted" };
+          }
         } catch {
-          // Continue – the user may have submitted anyway.
+          console.warn("[短信验证] OCR 键入失败");
         }
+      }
+      if (filled?.ok !== true) {
+        console.warn("[短信验证] 自动填写验证码失败，请直接在系统设置中输入后手动提交");
       } else {
         console.log("[短信验证] ✓ 验证码已提交");
       }
@@ -279,11 +319,21 @@ export async function completeSupervisedMacSettingsSmsVerification(options = {})
             const manualCode = await acquireCode(manualCodeProvider, manualTimeoutMs);
             if (manualCode) {
               console.log("[短信验证] ✓ 已接受手动验证码，正在提交 …");
-              const filled = await invokeNative("sms-code", { code: manualCode, suffix });
-              if (filled?.ok === true) {
-                console.log("[短信验证] ✓ 验证码已提交");
-              } else {
+              let filled = await invokeNative("sms-code", { code: manualCode, suffix });
+              if (filled?.ok !== true && ocrAvailable) {
+                console.log("[短信验证] AX 填写失败，尝试 OCR 辅助键入 …");
+                try {
+                  const ocrResult = await runSmsOcrHelper("ocr-code", { code: manualCode, suffix, timeoutMs: nativeCallTimeoutMs });
+                  if (ocrResult?.ok && ocrResult.stage === "code_submitted") {
+                    console.log("[短信验证] ✓ OCR 已键入验证码");
+                    filled = { ok: true, stage: "code_submitted" };
+                  }
+                } catch { /* OCR fallback failed */ }
+              }
+              if (filled?.ok !== true) {
                 console.warn("[短信验证] 自动填写失败，请在系统设置中直接输入验证码后手动提交");
+              } else {
+                console.log("[短信验证] ✓ 验证码已提交");
               }
               return { status: "submitted" };
             }
