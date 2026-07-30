@@ -346,20 +346,6 @@ func findSettingsApp() -> NSRunningApplication? {
     }
 }
 
-func postCommandKey(_ key: CGKeyCode) {
-    let src = CGEventSource(stateID: .combinedSessionState)
-    let keyDown = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: true)!
-    keyDown.flags = .maskCommand
-    let keyUp = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: false)!
-    keyUp.flags = .maskCommand
-    keyDown.post(tap: .cghidEventTap)
-    keyUp.post(tap: .cghidEventTap)
-}
-
-func postCmdA() {
-    postCommandKey(0x00)
-}
-
 func isEnabledAndFocused(_ field: AXUIElement) -> Bool {
     axBool(field, kAXEnabledAttribute as String) == true &&
         axBool(field, kAXFocusedAttribute as String) == true
@@ -589,19 +575,40 @@ func focusAndSetLoginValue(
     // Email fields must use real keyboard events. Setting AXValue alone does
     // not trigger the System Settings form validation that enables the Continue
     // button. Keyboard input produces the keystrokes that the form listens for.
+    //
+    // IMPORTANT: Do not use postCmdA() (Command+A) to select existing text in
+    // System Settings. The global Cmd+A shortcut can be intercepted by the app
+    // and cause the login pane to render blank. Instead, clear the field via AX
+    // before typing the new value.
     if isEmail {
         let originalEmailValue = axString(liveHit.element, kAXValueAttribute as String)
 
-        // Focus the text field with a click, then type the email character by
-        // character through the HID event tap.
+        // Focus the text field, clear any existing content via AX, then type
+        // the email through the HID event tap.
         if let keyboardHit = resolveFocusedLoginTextField(
             appElement: appElement,
             state: state,
             identifier: identifier
         ), isEnabledAndFocused(keyboardHit.element) {
-            // Select all existing text so the typed value replaces it.
-            postCmdA()
-            usleep(100_000)
+            // Clear existing content so typing replaces it cleanly.
+            let beforeClear = axString(keyboardHit.element, kAXValueAttribute as String)
+            if let beforeClear, !beforeClear.isEmpty {
+                guard AXUIElementSetAttributeValue(
+                    keyboardHit.element,
+                    kAXValueAttribute as CFString,
+                    "" as CFString
+                ) == .success,
+                      waitForExactLoginValue(
+                          appElement: appElement,
+                          state: state,
+                          identifier: identifier,
+                          expectedValue: ""
+                      ) else {
+                    // AX clear failed – continue with typing; partial overlap
+                    // is better than failing the entire email phase.
+                }
+                usleep(60_000)
+            }
 
             if let beforeTypeHit = activeFocusedLoginControl(
                 appElement: appElement,
@@ -734,7 +741,7 @@ func focusAndSetLoginValue(
         )
     }
 
-    postCmdA()
+    // Field is already empty from the clear above; no need for postCmdA().
     usleep(100_000)
     guard let beforeTypeHit = activeFocusedLoginControl(
         appElement: appElement,
