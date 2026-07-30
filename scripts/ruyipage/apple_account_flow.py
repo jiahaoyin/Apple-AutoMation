@@ -4390,6 +4390,19 @@ def wait_for_signed_in(
             # evidence is allowed to lose to a confirmed root session.
             last_state["trusted"] = True
             return last_state
+        if (
+            last_state.get("rootAccountMarker")
+            and is_developer_account_url(str(last_state.get("href") or ""))
+            and not last_state.get("twofa")
+            and not last_state.get("trustPrompt")
+        ):
+            # The Developer account shell has loaded and a root account marker
+            # is present. Any lingering error flag at this point is a false
+            # positive from a retiring Apple ID child iframe, not a real
+            # authentication failure. Accept the transition to avoid timing out
+            # on a visibly successful page.
+            last_state["trusted"] = True
+            return last_state
         if last_state.get("error"):
             if (
                 allow_retiring_child_errors
