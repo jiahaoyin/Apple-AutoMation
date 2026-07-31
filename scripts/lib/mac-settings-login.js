@@ -465,7 +465,7 @@ export async function runMacSettingsLoginPhase(creds, options = {}) {
   if (smsConfig?.source === "terminal") {
     try {
       saveMacSettingsSmsProviderConfig(smsConfig);
-      console.log("[短信验证] 短信服务配置已保存至 .env");
+      console.log("[短信] 短信服务配置已保存至 .env");
     } catch {
       throw new Error("MAC_SETTINGS_SMS_CONFIG_SAVE_FAILED");
     }
@@ -476,17 +476,17 @@ export async function runMacSettingsLoginPhase(creds, options = {}) {
   if (smsConfig) {
     if (!isMacSettingsSmsHelperAvailable()) {
       console.warn(
-        "[短信验证] 原生短信助手不可用，请在系统设置中手动完成短信验证"
+        "[短信] 原生短信助手不可用，请在系统设置中手动完成短信验证"
       );
     } else {
-      console.log("[短信验证] 等待短信验证界面出现…");
+      console.log("[短信] 等待短信验证界面出现…");
       await completeSupervisedMacSettingsSmsVerification({
         phoneNumber: smsConfig.phoneNumber,
         codeProvider: createSmsProviderCodePoller(smsConfig),
         supervised: true,
       });
       console.log(
-        "[短信验证] 验证码已提交，Apple 将自动继续；请在系统设置中完成剩余步骤"
+        "[短信] 验证码已提交，Apple 将自动继续；请在系统设置中完成剩余步骤"
       );
     }
   } else {

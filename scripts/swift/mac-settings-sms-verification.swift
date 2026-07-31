@@ -247,23 +247,39 @@ private func activeSystemSettings() -> NSRunningApplication? {
     )
     if extensions.count == 1 { return extensions[0] }
     if !extensions.isEmpty {
-        // Multiple extension processes — fall back to the host app.
         logStep(10, "activeSettings: \(extensions.count) extension(s), falling back to host")
     }
+
+    // Try the main System Settings host app by trusted path prefix.
     let hostMatches = NSWorkspace.shared.runningApplications.filter(isTrustedSystemSettingsHost)
     if hostMatches.count == 1 { return hostMatches[0] }
-    if hostMatches.isEmpty {
-        // Last resort: any running System Settings-like app.
-        let anyMatch = NSWorkspace.shared.runningApplications.first { app in
-            guard let bid = app.bundleIdentifier else { return false }
-            return settingsBundleIDs.contains(bid)
-        }
-        if let app = anyMatch {
-            logStep(11, "activeSettings: fallback to \(app.localizedName ?? "?") pid=\(app.processIdentifier)")
-            return app
-        }
+
+    // Try any app with a matching bundle ID.
+    let bundleMatches = NSWorkspace.shared.runningApplications.filter { app in
+        guard let bid = app.bundleIdentifier else { return false }
+        return settingsBundleIDs.contains(bid)
     }
-    logStep(12, "activeSettings: no match (hosts=\(hostMatches.count))")
+    if bundleMatches.count == 1 {
+        logStep(11, "activeSettings: bundle match \(bundleMatches[0].localizedName ?? "?") pid=\(bundleMatches[0].processIdentifier)")
+        return bundleMatches[0]
+    }
+
+    // Broadest fallback: any running app whose name contains System
+    // Settings or whose executable path is under /System/.
+    let namedMatches = NSWorkspace.shared.runningApplications.filter { app in
+        let name = (app.localizedName ?? "").lowercased()
+        if name.contains("system settings") || name.contains("\u{7CFB}\u{7EDF}\u{8BBE}\u{7F6E}") {
+            return true
+        }
+        guard let path = app.executableURL?.standardizedFileURL.path else { return false }
+        return path.hasPrefix("/System/Library/") || path.hasPrefix("/System/Applications/")
+    }
+    if let named = namedMatches.first {
+        logStep(12, "activeSettings: named fallback \(named.localizedName ?? "?") pid=\(named.processIdentifier)")
+        return named
+    }
+
+    logStep(13, "activeSettings: no match found at all")
     return nil
 }
 
