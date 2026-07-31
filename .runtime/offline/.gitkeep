@@ -1,0 +1,13 @@
+# 离线安装包目录
+# 请预先下载以下文件放入此目录，install.sh 将优先使用本地文件：
+#
+# Python 3.12.10 (universal2):
+#   python-3.12.10-macos11.pkg
+#   下载: https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg
+#   SHA-256: 8373e58da4ea146b3eb1c1f9834f19a319440b6b679b06050b1f9ee3237aa8e4
+#
+# Node.js 22.14.0 (按架构选择):
+#   node-v22.14.0-darwin-arm64.tar.gz  (Apple Silicon)
+#   node-v22.14.0-darwin-x64.tar.gz    (Intel)
+#   下载: https://nodejs.org/dist/v22.14.0/
+#

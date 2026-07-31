@@ -9,6 +9,7 @@ LOCAL_NODE_VERSION="${LOCAL_NODE_VERSION:-22.14.0}"
 readonly LOCAL_PYTHON_VERSION="3.12.10"
 PYTHON_BOOTSTRAP_SERIES="${LOCAL_PYTHON_VERSION%.*}"
 PYTHON_DOWNLOAD_DIR="$PACKAGE_ROOT/.runtime/downloads"
+OFFLINE_DIR="$PACKAGE_ROOT/.runtime/offline"
 readonly PYTHON_BOOTSTRAP_PKG_URL="https://www.python.org/ftp/python/${LOCAL_PYTHON_VERSION}/python-${LOCAL_PYTHON_VERSION}-macos11.pkg"
 readonly PYTHON_BOOTSTRAP_SHA256="8373e58da4ea146b3eb1c1f9834f19a319440b6b679b06050b1f9ee3237aa8e4"
 PYTHON_FRAMEWORK_BIN="/Library/Frameworks/Python.framework/Versions/${PYTHON_BOOTSTRAP_SERIES}/bin"
@@ -203,21 +204,27 @@ verify_staged_python_signature() {
 }
 
 install_python_official_pkg() {
-  local pkg partial
+  local pkg partial offline_pkg
   /bin/mkdir -p "$PYTHON_DOWNLOAD_DIR"
   pkg="$PYTHON_DOWNLOAD_DIR/python-${LOCAL_PYTHON_VERSION}-macos11.pkg"
   partial="${pkg}.part"
+  offline_pkg="$OFFLINE_DIR/python-${LOCAL_PYTHON_VERSION}-macos11.pkg"
 
   if [[ ! -f "$pkg" ]]; then
-    echo ">>> 从 python.org 下载官方 Python ${LOCAL_PYTHON_VERSION} universal2 安装包"
-    if ! /usr/bin/curl \
-      --fail --location --retry 3 --proto '=https' --proto-redir '=https' --tlsv1.2 \
-      --output "$partial" "$PYTHON_BOOTSTRAP_PKG_URL"; then
-      /bin/rm -f "$partial"
-      echo "错误: Python 安装包下载失败: $PYTHON_BOOTSTRAP_PKG_URL"
-      return 1
+    if [[ -f "$offline_pkg" ]]; then
+      echo ">>> 使用本地离线安装包: $offline_pkg"
+      /bin/cp "$offline_pkg" "$pkg"
+    else
+      echo ">>> 从 python.org 下载官方 Python ${LOCAL_PYTHON_VERSION} universal2 安装包"
+      if ! /usr/bin/curl \
+        --fail --location --retry 3 --proto '=https' --proto-redir '=https' --tlsv1.2 \
+        --output "$partial" "$PYTHON_BOOTSTRAP_PKG_URL"; then
+        /bin/rm -f "$partial"
+        echo "错误: Python 安装包下载失败: $PYTHON_BOOTSTRAP_PKG_URL"
+        return 1
+      fi
+      /bin/mv "$partial" "$pkg"
     fi
-    /bin/mv "$partial" "$pkg"
   fi
 
   verify_python_pkg_hash "$pkg"
@@ -266,7 +273,7 @@ ensure_local_node_path() {
 }
 
 install_node_official_binary() {
-  local arch dest tarball url
+  local arch dest tarball url offline_tarball
   arch="$(uname -m)"
   case "$arch" in
     arm64) arch="arm64" ;;
@@ -277,13 +284,20 @@ install_node_official_binary() {
   dest="$LOCAL_NODE_DIR"
   tarball="node-v${LOCAL_NODE_VERSION}-darwin-${arch}.tar.gz"
   url="https://nodejs.org/dist/v${LOCAL_NODE_VERSION}/${tarball}"
+  offline_tarball="$OFFLINE_DIR/${tarball}"
 
-  echo ">>> 从 nodejs.org 下载官方 Node 二进制"
+  echo ">>> 安装 Node"
   echo "    版本: v${LOCAL_NODE_VERSION}"
   echo "    安装到: $dest"
 
   mkdir -p "$dest"
-  curl -fsSL "$url" | tar -xz -C "$dest" --strip-components=1
+  if [[ -f "$offline_tarball" ]]; then
+    echo ">>> 使用本地离线安装包: $offline_tarball"
+    tar -xzf "$offline_tarball" -C "$dest" --strip-components=1
+  else
+    echo ">>> 从 nodejs.org 下载官方 Node 二进制"
+    curl -fsSL "$url" | tar -xz -C "$dest" --strip-components=1
+  fi
   export PATH="$dest/bin:$PATH"
 
   local major
